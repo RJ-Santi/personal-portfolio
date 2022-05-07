@@ -1,56 +1,68 @@
-const express = require('express');
-const http = require('http');
-const nodemailer = require('nodemailer');
-require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+const nodemailer = require("nodemailer");
+const multiparty = require("multiparty");
+require("dotenv").config();
+
+const PORT = process.env.PORT || 5000;
+
+// instantiate an express app
 const app = express();
+// cors
+app.use(cors({ origin: "*" }));
 
-const PORT = process.env.PORT || 3000;
+app.use(express.static(__dirname + "/public")); //make public static
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded());
-app.use(express.static('public'));
-
-app.get('/', (req, res) => {
-  res.send(__dirname + 'public/index');
+const transporter = nodemailer.createTransport({
+  host: 'smtp-mail.outlook.com',
+  port: 587,
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.PASS,
+  },
 });
 
-app.post('/', (req, res) => {
-  console.log(req.body);
-
-  // if using gmail
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.mail.yahoo.com',
-    port: 587,
-    service: 'yahoo',
-    secure: false,
-    auth: {
-      user: 'process.env.EMAIL',
-      pass: 'process.env.PASSWORD'
-    },
-    debug: false,
-    logger: true
+// verify connection configuration
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log(error);
+  } else {
+    console.log("Server is ready to take our messages");
   }
-  );
+});
 
-  const info = {
-    from: req.body.email,
-    to: 'rsjames13@yahoo.com',
-    subject: `Message from ${req.body.email}: ${req.body.subject}`,
-    text: req.body.message
-  }
-
-  const sendMail = transporter.sendMail(info, (err, data) => {
-    if(err) {
-      console.log(err);
-      res.send('Error');
-    } else {
-      console.log('Email sent: ' + data.response);
-      res.send('Success');
-    }
+app.post("/send", (req, res) => {
+  let form = new multiparty.Form();
+  let data = {};
+  form.parse(req, function (err, fields) {
+    Object.keys(fields).forEach(function (property) {
+      data[property] = fields[property].toString();
+    });
+    console.log(data);
+    const mail = {
+      sender: `${data.name} <${data.email}>`,
+      to: process.env.EMAIL, // receiver email,
+      subject: data.subject,
+      text: `${data.name} <${data.email}> \n${data.message}`,
+    };
+    transporter.sendMail(mail, (err, data) => {
+      if (err) {
+        console.log(err);
+        res.status(500).send("Something went wrong.");
+      } else {
+        res.status(200).send("Email successfully sent to recipient!");
+      }
+    });
   });
 });
 
+//Index page (static HTML)
+app.route("/").get(function (req, res) {
+  res.sendFile(process.cwd() + "/public/index.html");
+});
+
+/*************************************************/
+// Express server listening...
 app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}.`);
+  console.log(`Listening on port ${PORT}...`);
 });
